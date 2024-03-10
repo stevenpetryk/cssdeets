@@ -7,6 +7,7 @@
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.11.25",
+    "postcss-selector-parser": "^6.0.15",
     "typescript": "^5.4.2"
   },
   "dependencies": {
