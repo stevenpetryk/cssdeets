@@ -1,66 +1,49 @@
-const fs = require("fs/promises")
+const os = require("node:os")
 const path = require("path")
 const fg = require("fast-glob")
-const { SourceNode } = require("source-map")
-const { parse } = require("postcss")
+const { Worker } = require("node:worker_threads")
 
-const CLASSNAME_MATCHER = /.([a-zA-Z0-9_-]+)/g
+const numWorkers = os.cpus().length - 1
 
-const files = fg.sync(
-  path.join(__dirname, "../../discord/discord_app/modules/a*/**/*.module.css")
-)
+class WorkerPool {
+  constructor() {
+    /** @type {any[]} */
+    this.workers = []
+  }
 
-files.map(async (file) => {
-  const content = await fs.readFile(file, "utf-8")
+  async run() {
+    for (let i = 0; i < numWorkers; i++) {
+      const worker = new Worker(path.join(__dirname, "worker.js"))
+      this.workers.push(worker)
 
-  /** @type {import('postcss').Rule[]} */
-  const rules = []
-
-  parse(content).walkRules((rule) => {
-    const matches = rule.selector.match(CLASSNAME_MATCHER)
-
-    if (matches) {
-      rules.push(rule)
+      worker.on("message", (message) => {
+        if (message.type === "error") {
+          console.error(message.error)
+        }
+      })
     }
-  })
 
-  const rootNode = new SourceNode(1, 0, null, [
-    `declare const styles: {\n`,
-    ...rules.flatMap((rule) => {
-      const matches = rule.selector.match(CLASSNAME_MATCHER)
+    const files = fg.sync(["discord_app/**/*.module.css"], {
+      ignore: ["**/node_modules/**"],
+      cwd: path.join(__dirname, "../../discord"),
+      absolute: true,
+    })
 
-      if (matches) {
-        return matches.flatMap((match) => {
-          return [
-            '  "',
-            new SourceNode(
-              rule.source?.start?.line ?? 1,
-              (rule.source?.start?.column ?? 1) - 1,
-              file,
-              match.slice(1)
-            ),
-            new SourceNode(
-              rule.source?.end?.line ?? 1,
-              rule.source?.end?.column ?? 0,
-              file,
-              ""
-            ),
-            `\": string;\n`,
-          ]
-        })
-      } else {
-        return []
-      }
-    }),
-    `};\n`,
-    `export default styles;`,
-  ])
+    process.stderr.write(
+      `Processing ${files.length} files with ${numWorkers} workers\n`
+    )
 
-  const dts = file.replace(".module.css", ".module.css.d.ts")
-  const dtsMap = file.replace(".module.css", ".module.css.d.ts.map")
+    for (const file of files) {
+      const worker = this.workers.pop()
+      worker.postMessage({ type: "process", file })
+      this.workers.unshift(worker)
+    }
 
-  const newSource = rootNode.toStringWithSourceMap({ file: dts })
+    for (const worker of this.workers) {
+      worker.postMessage({ type: "exit" })
+    }
+  }
+}
 
-  await fs.writeFile(dts, newSource.code)
-  await fs.writeFile(dtsMap, newSource.map.toString())
-})
+const pool = new WorkerPool()
+pool.run()
