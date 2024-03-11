@@ -7,7 +7,6 @@ async function run() {
     ["/Users/steven.petryk/src/discord/discord_app/**/*.module.css"],
     {
       ignore: ["**/node_modules/**", "**/dist/**", "**/bazel-discord/**"],
-      cwd: path.join(__dirname, "../../discord"),
       absolute: true,
     }
   )
@@ -18,7 +17,7 @@ async function run() {
   for await (const file of files) {
     promises.push(processFile(file.toString("utf-8")))
     const relPath = path.relative("../discord", file.toString("utf-8"))
-    // process.stderr.write(`${relPath}\n`)
+    process.stderr.write(`${relPath}\n`)
     numFiles++
   }
 
