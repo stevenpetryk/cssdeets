@@ -46,7 +46,6 @@ async function processFile(file) {
   const rootNode = new SourceNode(1, 0, null, [
     "// prettier-ignore\n",
     "/* eslint-disable */\n",
-    "declare const styles: {\n",
     ...rules.flatMap((rule) => {
       const classNames = getClassNames(rule)
 
@@ -75,7 +74,7 @@ async function processFile(file) {
             .join("\n") + "\n",
           "   * ```\n",
           "   */\n",
-          '  "',
+          "export const ",
           new SourceNode(
             rule.source?.start?.line ?? 1,
             (rule.source?.start?.column ?? 1) - 1,
@@ -88,12 +87,10 @@ async function processFile(file) {
             file,
             ""
           ),
-          `\": string;\n`,
+          `: string;\n`,
         ]
       })
     }),
-    `};\n`,
-    `export default styles;`,
   ])
 
   const dts = file.replace(".module.css", ".module.css.d.ts")
